@@ -1,4 +1,4 @@
-#Policy Forward module
+# Policy Forward module
 
 ## Trabalho para a cadeira de Protocolo de comunicações 2017/1.
 
@@ -19,7 +19,7 @@ Executando:
 git clone https://github.com/fizaguirre/protocols-policyforward.git policyforward
 ```
 
-Importar o projeto do floodlight no eclipse. Na arvore de pacotes do em /src/main/java deve haver um pacote policyforward.
+Importar o projeto do floodlight no eclipse. Na arvore de pacotes em /src/main/java deve haver um pacote PolicyForward.
 
 Adicionar no arquivo /src/main/resources/floodlightdefault.properties o modulo policyforward como exemplo abaixo.
 floodlight.modules=\
