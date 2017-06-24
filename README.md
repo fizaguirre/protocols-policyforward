@@ -34,6 +34,6 @@ Adicionar ao fim do arquivo /src/main/resources/META-INF/services/net.floodlight
 Os arquivos floodlightdefault.properties e net.floodlightcontroller.core.module.IFloodlightModule são responsaveis por comunicar que modulos serão carregados na inicialização do Floodlight. Não precismos de alguns destes modulos, e estes podem interfirar no comportamento do que estamos trabalhando. Portanto desabilitar os modulos ACL, Firewall, e Forwarding removendo a entrada destes modulos dos arquivos floodlightdefault.properties e net.floodlightcontroller.core.module.IFloodlightModule.
 
 
-
+A topologia utilizada para testes até o momento encontra-se na pasta MininetTopo.
 
 

@@ -10,23 +10,29 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IListener.Command;
+import net.floodlightcontroller.core.IOFMessageListener;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.module.*;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.routing.*;
 
-public class PolicyForward extends ForwardingBase implements IFloodlightModule, ILinkDiscoveryListener {
+public class PolicyForward extends ForwardingBase implements IOFMessageListener, IFloodlightModule, ILinkDiscoveryListener {
 	
 	protected static Logger logger;
 	protected BlockingQueue<LDUpdate> lduUpdate; //Queue to hold pending topology updates
 	protected static ILinkDiscoveryService linkDiscoveryService; //LLDP service. It handles the LLDP protocol. We need to subscribe to it to listen for LLDP topology events.
+	protected IFloodlightProviderService floodlightProvider;
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
@@ -60,6 +66,7 @@ public class PolicyForward extends ForwardingBase implements IFloodlightModule, 
 		// TODO Auto-generated method stub
 		logger = LoggerFactory.getLogger(PolicyForward.class);
 		linkDiscoveryService = context.getServiceImpl(ILinkDiscoveryService.class);
+		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 	}
 
 	@Override
@@ -68,6 +75,7 @@ public class PolicyForward extends ForwardingBase implements IFloodlightModule, 
 		logger.info("Starting up PolicyForward module");
 		linkDiscoveryService.addListener(this);
 		lduUpdate = new LinkedBlockingQueue<LDUpdate>();
+		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 	}
 
 	@Override
@@ -75,6 +83,22 @@ public class PolicyForward extends ForwardingBase implements IFloodlightModule, 
 			IRoutingDecision decision, FloodlightContext cntx) {
 		// TODO Auto-generated method stub
 		return null;
+	}
+	
+	@Override
+	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
+		// TODO Auto-generated method stub
+		switch(msg.getType())
+		{
+		case PACKET_IN:
+			Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+			logger.info("Packet from src mac addr {} received from switch {}", eth.getSourceMACAddress(), sw.getId().toString());
+			break;
+		default:
+			break;
+		}
+		
+		return Command.CONTINUE;
 	}
 	
 	@Override
@@ -95,7 +119,7 @@ public class PolicyForward extends ForwardingBase implements IFloodlightModule, 
 		{
 			try {
 				ldu = lduUpdate.poll();
-				logger.info("Source Switch datapath ID: {}\nDest. Swtich datapah ID:", ldu.getSrc().toString(), ldu.getDst().toString());
+				logger.info("Src datapath ID {}", ldu.getSrc().toString());
 			}
 			catch(NoSuchElementException e)
 			{
@@ -104,11 +128,9 @@ public class PolicyForward extends ForwardingBase implements IFloodlightModule, 
 			}
 			catch(NullPointerException e)
 			{
-				logger.info("{}", e.getCause());
+				//logger.info("{}", e.getCause());
 			}
 		}
-		/**
-		**/
 	}
 
 }
