@@ -12,9 +12,7 @@ git submodule init
 git submodule update
 ```
 
-Clonar o repostitório do modulo do trabalho em:
-floodlight/src/main/java/net/floodlightcontroller/
-Executando:
+Clonar o repostitório do modulo do trabalho em floodlight/src/main/java/net/floodlightcontroller/, executando:
 ```
 git clone https://github.com/fizaguirre/protocols-policyforward.git policyforward
 ```
@@ -35,5 +33,7 @@ Os arquivos floodlightdefault.properties e net.floodlightcontroller.core.module.
 
 
 A topologia utilizada para testes até o momento encontra-se na pasta MininetTopo.
+
+Para mais detalhes da configuração do ambiente do Floodlight acessar: https://floodlight.atlassian.net/wiki/display/floodlightcontroller/Installation+Guide.
 
 
