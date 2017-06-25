@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -22,8 +23,11 @@ import net.floodlightcontroller.core.IListener.Command;
 import net.floodlightcontroller.core.IOFMessageListener;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.module.*;
+import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+import net.floodlightcontroller.linkdiscovery.Link;
+import net.floodlightcontroller.linkdiscovery.internal.LinkInfo;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.routing.*;
 
@@ -33,6 +37,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	protected BlockingQueue<LDUpdate> lduUpdate; //Queue to hold pending topology updates
 	protected static ILinkDiscoveryService linkDiscoveryService; //LLDP service. It handles the LLDP protocol. We need to subscribe to it to listen for LLDP topology events.
 	protected IFloodlightProviderService floodlightProvider;
+	protected Topology topo;
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
@@ -109,7 +114,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	@Override
 	public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
 		// TODO Auto-generated method stub
-		
+		/*
 		lduUpdate.addAll(updateList); //Get a list of link layer discovery updates
 		
 		logger.info(" -- Received LLDP update --");
@@ -119,7 +124,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		{
 			try {
 				ldu = lduUpdate.poll();
-				logger.info("Src datapath ID {}", ldu.getSrc().toString());
+				logger.info("Src datapath ID {} Latency: {}", ldu.getSrc().toString(), ldu.getLatency().toString());
 			}
 			catch(NoSuchElementException e)
 			{
@@ -131,6 +136,20 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				//logger.info("{}", e.getCause());
 			}
 		}
+		*/
+		this.buildTopology();
+	}
+	
+	protected void buildTopology()
+	{
+		Map<NodePortTuple, Set<Link>> npt = linkDiscoveryService.getPortLinks();
+		Map<Link, LinkInfo> links = linkDiscoveryService.getLinks();
+		topo = new Topology(npt, links);
+		topo.showLinks();
+		
+		/*Map<Link, LinkInfo> links = linkDiscoveryService.getLinks();
+		for (Map.Entry<Link, LinkInfo> link : links.entrySet())
+			logger.info("Link {} Link Info {}", link.getKey(), link.getValue());*/
 	}
 
 }
