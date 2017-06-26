@@ -1,5 +1,6 @@
 package net.floodlightcontroller.policyforward;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -8,10 +9,10 @@ import java.util.Map;
 import java.util.Set;
 
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.U64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.linkdiscovery.Link;
@@ -22,22 +23,27 @@ public class Topology {
 	
 	protected Logger logger;
 	protected Set<DatapathId> switches; //switches in the network
+	protected Map<Link, LinkInfo> links; //Links
 	protected Map<NodePortTuple, Set<Link>> topo; //Port switch connected to link
-	protected Map<DatapathId, Set<Link>> topoLinks; //Links 
+	protected Map<DatapathId, Set<Link>> topoLinks; //Links
+	protected Set<NodePortTuple> blockedPorts; //Blocked ports
 	
-	public Topology(Map<NodePortTuple, Set<Link>> swPortLink, Map<Link, LinkInfo> links)
+	protected Set<Node> nodes; //Nodes
+	
+	public Topology(Map<NodePortTuple, Set<Link>> swPortLink, Map<Link, LinkInfo> l)
 	{
 		logger = LoggerFactory.getLogger(PolicyForward.class);
 		switches = new HashSet<DatapathId>();
 		topo = swPortLink;
+		links = l;
+		blockedPorts = new HashSet<NodePortTuple>();
 		
-		//Topology Links
-		for( Map.Entry<NodePortTuple, Set<Link>> ntp : swPortLink.entrySet()) {
-			topoLinks.put(ntp.getKey().getNodeId(), ntp.getValue());
-		}
+		nodes = new HashSet<Node>();
+		for ( Map.Entry<NodePortTuple, Set<Link>> m : swPortLink.entrySet() )
+			nodes.add(new Node(m.getKey().getNodeId(), m.getValue()));
 		
 		this.initSwitcheSet(swPortLink);		
-	}
+	}	
 	
 	private void initSwitcheSet(Map<NodePortTuple, Set<Link>> swPortLink) {
 		for (NodePortTuple node : this.getTopology().keySet()) {
@@ -71,73 +77,79 @@ public class Topology {
 		return topoLinks;
 	}
 	
-	private List<NodePortTuple> dijkstra(Map<DatapathId, Set<Link>> topo, NodePortTuple srcPort)
-	{
-		Map<DatapathId, U64> nodeCost = new HashMap<DatapathId, U64>();
-		Set<DatapathId> unvisited = new HashSet<DatapathId>();
-		List<Link> path = new LinkedList<Link>();
-		
-		//First step, mark the root as 0 and inf anything else
-		for ( DatapathId d : topo.keySet()) {
-			if ( srcPort.getNodeId() == d) {
-				nodeCost.put(d, U64.ZERO);
-			}
-			else {
-				unvisited.add(d);
-				nodeCost.put(d, U64.FULL_MASK);
+	//Review
+	private Map<DatapathId, Map<DatapathId,U64>> computeNeighborhoodCost(Map<DatapathId, Set<Link>> topo, Map<DatapathId, Map<DatapathId,U64>> costs, DatapathId node) {
+		U64 edgeCost;
+		U64 costSum;
+		for ( Link d : topo.get(node)) { //Foreach neighbor
+			edgeCost = costs.get(node).get(this.getNeighbor(node, d));
+			costSum = edgeCost.add(edgeCost);
+			if (costSum.compareTo(edgeCost) < 0)  { //If the metric is less then the recorded
+				costs.get(node).remove(this.getNeighbor(node, d)); //Remove the current entry for the map.
+				costs.get(node).put(this.getNeighbor(node, d), costSum); //Add the new one
 			}
 		}
-		
-		
-		
-		
-		
-		return null;
+				
+		return costs;
 	}
 	
-	private Link computeNeighborhoodCost(Map<DatapathId, Set<Link>> topo, Map<DatapathId, U64> costs, DatapathId node) {
+	private DatapathId getNeighbor(DatapathId node, Link l) {
+		if ( l.getDst() == node)
+			return l.getSrc();
+		return l.getDst();
+	}
+	
+	//Return true if there is an edge betwen two nodes
+	private boolean hasEdge(DatapathId node1, DatapathId node2) {
+		for (Link l : this.getTopology().get(node1)) {
+			if ( l.getSrc() == node1 && l.getDst() == node2)
+				return true;
+			else if (l.getDst() == node1 && l.getSrc() == node2)
+				return true;
+		}
+		return false;
+	}
+	
+	private U64 getCostFrom(DatapathId node1, DatapathId node2) {
+		U64 cost = U64.FULL_MASK;
 		
-		Link returnLink = null;
-		
-		for (Map.Entry<DatapathId, Set<Link>> m : topo.entrySet()) {
-			if(m.getKey() == node) {
-				for(Link l : m.getValue()) {
-					if ( costs.get(m.getKey()).compareTo(l.getLatency()) < 0)
-						returnLink = l;
-				}
+		for ( Link l : this.getTopology().get(node1)) {
+			if (l.getSrc() == node1 && l.getDst() == node2)
+				cost = l.getLatency();
+			else if (l.getSrc() == node2 && l.getDst() == node1)
+				cost = l.getLatency();
+		}
+		return cost;
+	}
+	
+	public Set<OFPort> getSwBroadcastPorts(DatapathId sw) {
+		Set<OFPort> swPorts = new HashSet<OFPort>();
+		for ( Map.Entry<NodePortTuple, Set<Link>> npt : this.getTopology().entrySet()) {
+			if (npt.getKey().getNodeId() == sw) {
+				swPorts.add(npt.getKey().getPortId());
 			}
 		}
-		
-		return returnLink;
+		return swPorts;
 	}
-	
 	
 	public void showTopology()
 	{
-		
-		for(NodePortTuple node : this.getTopology().keySet())
-		{
-			String msg = new String();
-			Set<Link> links = this.getTopology().get(node);
-			msg = "( Node "+ node.getNodeId().toString()+",";
-			for(Link link : links)
-			{
-				msg = msg.concat("("+link.getSrc().toString()+","+link.getSrcPort()+")");
-				msg = msg.concat(" - ");
-				msg = msg.concat("("+link.getDst().toString()+","+link.getDstPort()+")");
-				msg = msg.concat(")");
-			}
-			logger.info(msg);
-		}
-	}
-	
-	public void showLinks()
-	{
 		String msg = new String();
-		logger.info(" ---- Links ----");
-		for (Map.Entry<DatapathId, Set<Link>> link : this.getLinks().entrySet())
-		{
-			logger.info("DatapathID: {} Links {}",link.getKey().toString(), link.getValue().toString());
+		try {
+			for ( Node n : this.nodes) {
+				msg = msg.concat("Node: "+ n.getNodeId().toString());
+				for (DatapathId l : n.getNeighbors() )
+					msg = msg.concat(" "+"Neighbor: "+l.toString());
+				
+				for (Link l : n.getLinks())
+					msg = msg.concat(" " + "Link: " + l.toString());
+				
+				logger.info(msg);
+				msg = new String();
+			}
+		}
+		catch ( NullPointerException e ) {
+			logger.info(e.toString());
 		}
 	}
 

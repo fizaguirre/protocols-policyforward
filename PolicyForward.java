@@ -2,6 +2,7 @@ package net.floodlightcontroller.policyforward;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -13,7 +14,14 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPacketOut;
 import org.projectfloodlight.openflow.protocol.OFType;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActions;
+import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFBufferId;
+import org.projectfloodlight.openflow.types.OFPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,8 +36,10 @@ import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
 import net.floodlightcontroller.linkdiscovery.Link;
 import net.floodlightcontroller.linkdiscovery.internal.LinkInfo;
+import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.routing.*;
+import net.floodlightcontroller.util.OFMessageUtils;
 
 public class PolicyForward extends ForwardingBase implements IOFMessageListener, IFloodlightModule, ILinkDiscoveryListener {
 	
@@ -92,18 +102,41 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-		// TODO Auto-generated method stub
+
 		switch(msg.getType())
 		{
 		case PACKET_IN:
 			Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
 			logger.info("Packet from src mac addr {} received from switch {}", eth.getSourceMACAddress(), sw.getId().toString());
+			
+			if ( eth.getEtherType() == EthType.ARP) {
+				if ( eth.getDestinationMACAddress() == MacAddress.BROADCAST) {
+					// SEND PACKET TO ALL OTHER PORTS OF THE SWITCH
+					this.doBroacastPacket(sw, msg);
+				}
+			}
+			
 			break;
 		default:
 			break;
 		}
 		
 		return Command.CONTINUE;
+	}
+	
+	private void doBroacastPacket(IOFSwitch sw, OFMessage m) {
+		OFPacketIn pi = (OFPacketIn) m;
+		OFPort portIn = pi.getInPort();
+
+		//Need to compute an spanning tree to avoid loops
+		OFPacketOut po = sw.getOFFactory().buildPacketOut()
+				.setData(pi.getData())
+				.setInPort(portIn)
+				.setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(OFPort.FLOOD, Integer.MAX_VALUE)))
+				.build();
+		sw.write(po);
+
+		return;
 	}
 	
 	@Override
@@ -113,30 +146,8 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 
 	@Override
 	public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
-		// TODO Auto-generated method stub
-		/*
+		
 		lduUpdate.addAll(updateList); //Get a list of link layer discovery updates
-		
-		logger.info(" -- Received LLDP update --");
-		
-		LDUpdate ldu;
-		while(lduUpdate.peek() != null)
-		{
-			try {
-				ldu = lduUpdate.poll();
-				logger.info("Src datapath ID {} Latency: {}", ldu.getSrc().toString(), ldu.getLatency().toString());
-			}
-			catch(NoSuchElementException e)
-			{
-				logger.info("LLDU empty");
-				break;
-			}
-			catch(NullPointerException e)
-			{
-				//logger.info("{}", e.getCause());
-			}
-		}
-		*/
 		this.buildTopology();
 	}
 	
@@ -145,11 +156,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		Map<NodePortTuple, Set<Link>> npt = linkDiscoveryService.getPortLinks();
 		Map<Link, LinkInfo> links = linkDiscoveryService.getLinks();
 		topo = new Topology(npt, links);
-		topo.showLinks();
-		
-		/*Map<Link, LinkInfo> links = linkDiscoveryService.getLinks();
-		for (Map.Entry<Link, LinkInfo> link : links.entrySet())
-			logger.info("Link {} Link Info {}", link.getKey(), link.getValue());*/
+		topo.showTopology();
 	}
 
 }
