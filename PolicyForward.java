@@ -114,10 +114,15 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 			logger.info("Packet from src mac addr {} received from switch {}", eth.getSourceMACAddress(), sw.getId().toString());
 			
 			if ( eth.getEtherType() == EthType.ARP) {
-				if ( eth.getDestinationMACAddress() == MacAddress.BROADCAST) {
-					// SEND PACKET TO ALL OTHER PORTS OF THE SWITCH
+				// SEND PACKET TO ALL OTHER PORTS OF THE SWITCH
+				
+				ARP arp = (ARP) eth.getPayload();
+				if ( arp.getOpCode() == ARP.OP_REQUEST)
 					this.doBroacastPacket(sw, msg);
-				}
+				else if ( arp.getOpCode() == ARP.OP_REPLY)
+					//TODO
+					//Get path between nodes
+					logger.info("Get path between nodes");
 			}
 			
 			break;
