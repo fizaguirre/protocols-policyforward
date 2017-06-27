@@ -33,6 +33,7 @@ Os arquivos floodlightdefault.properties e net.floodlightcontroller.core.module.
 
 
 A topologia utilizada para testes até o momento encontra-se na pasta MininetTopo.
+sudo mn --custom topo1.py --topo mytopo --controller=remote,ip=143.54.8.16,port=6653 --mac --switch ovsk --link tc
 
 Para mais detalhes da configuração do ambiente do Floodlight acessar: https://floodlight.atlassian.net/wiki/display/floodlightcontroller/Installation+Guide.
 
