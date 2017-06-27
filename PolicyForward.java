@@ -39,6 +39,7 @@ import net.floodlightcontroller.linkdiscovery.internal.LinkInfo;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.routing.*;
+import net.floodlightcontroller.topology.ITopologyService;
 import net.floodlightcontroller.util.OFMessageUtils;
 
 public class PolicyForward extends ForwardingBase implements IOFMessageListener, IFloodlightModule, ILinkDiscoveryListener {
@@ -47,6 +48,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	protected BlockingQueue<LDUpdate> lduUpdate; //Queue to hold pending topology updates
 	protected static ILinkDiscoveryService linkDiscoveryService; //LLDP service. It handles the LLDP protocol. We need to subscribe to it to listen for LLDP topology events.
 	protected IFloodlightProviderService floodlightProvider;
+	protected ITopologyService topologyService;
 	protected Topology topo;
 
 	@Override
@@ -72,6 +74,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IFloodlightProviderService.class);
 		l.add(ILinkDiscoveryService.class);
+		l.add(ITopologyService.class);
 		
 		return l;
 	}
@@ -82,6 +85,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		logger = LoggerFactory.getLogger(PolicyForward.class);
 		linkDiscoveryService = context.getServiceImpl(ILinkDiscoveryService.class);
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
+		topologyService = context.getServiceImpl(ITopologyService.class);
 	}
 
 	@Override
@@ -127,14 +131,22 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	private void doBroacastPacket(IOFSwitch sw, OFMessage m) {
 		OFPacketIn pi = (OFPacketIn) m;
 		OFPort portIn = pi.getInPort();
-
-		//Need to compute an spanning tree to avoid loops
-		OFPacketOut po = sw.getOFFactory().buildPacketOut()
-				.setData(pi.getData())
-				.setInPort(portIn)
-				.setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(OFPort.FLOOD, Integer.MAX_VALUE)))
-				.build();
-		sw.write(po);
+		
+		OFPacketOut po;
+		Set<OFPort> broadcastPorts;
+		broadcastPorts = topologyService.getSwitchBroadcastPorts(sw.getId());
+		for (OFPort port : broadcastPorts) {
+			
+			if( port == portIn)
+				continue;
+			
+			po = sw.getOFFactory().buildPacketOut()
+					.setData(pi.getData())
+					.setInPort(portIn)
+					.setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(port, Integer.MAX_VALUE)))
+					.build();
+			sw.write(po);			
+		}
 
 		return;
 	}
@@ -148,15 +160,15 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
 		
 		lduUpdate.addAll(updateList); //Get a list of link layer discovery updates
-		this.buildTopology();
+		//this.buildTopology();
 	}
 	
 	protected void buildTopology()
 	{
 		Map<NodePortTuple, Set<Link>> npt = linkDiscoveryService.getPortLinks();
 		Map<Link, LinkInfo> links = linkDiscoveryService.getLinks();
-		topo = new Topology(npt, links);
-		topo.showTopology();
+		//topo = new Topology(npt, links);
+		//topo.showTopology();
 	}
 
 }
