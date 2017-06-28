@@ -184,6 +184,9 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 			
 			
 			matchRule = sw.getOFFactory().buildMatch()
+				.setExact(MatchField.ETH_TYPE, EthType.IPv4)
+				.setExact(MatchField.ETH_SRC, srcHost.getMACAddress())
+				.setExact(MatchField.ETH_DST, dstHost.getMACAddress())
 				.setExact(MatchField.IPV4_SRC, ipv4.getSourceAddress())
 				.setExact(MatchField.IPV4_DST, ipv4.getDestinationAddress())
 				.build();
