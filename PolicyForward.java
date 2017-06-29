@@ -203,17 +203,28 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		OFPacketOut po;
 		Set<OFPort> broadcastPorts;
 		broadcastPorts = topologyService.getSwitchBroadcastPorts(sw.getId());
-		for (OFPort port : broadcastPorts) {
-			
-			if( port == portIn)
-				continue;
-			
+		
+		if ( broadcastPorts.isEmpty() ) { //Only one switch
 			po = sw.getOFFactory().buildPacketOut()
-					.setData(pi.getData())
-					.setInPort(portIn)
-					.setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(port, Integer.MAX_VALUE)))
-					.build();
-			sw.write(po);			
+			.setData(pi.getData())
+			.setInPort(pi.getInPort())
+			.setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(OFPort.FLOOD, Integer.MAX_VALUE)))
+			.build();
+			sw.write(po);
+		}
+		else {		
+			for (OFPort port : broadcastPorts) {
+				
+				if( port == portIn)
+					continue;
+				
+				po = sw.getOFFactory().buildPacketOut()
+						.setData(pi.getData())
+						.setInPort(portIn)
+						.setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(port, Integer.MAX_VALUE)))
+						.build();
+				sw.write(po);			
+			}
 		}
 
 		return;
