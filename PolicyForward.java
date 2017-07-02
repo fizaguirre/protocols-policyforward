@@ -8,20 +8,28 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFPacketOut;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsRequest;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.ICMPv4Type;
 import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.TableId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
@@ -29,16 +37,21 @@ import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.IOFMessageListener;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.module.*;
+import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.devicemanager.IDevice;
 import net.floodlightcontroller.devicemanager.IDeviceService;
 import net.floodlightcontroller.devicemanager.SwitchPort;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+import net.floodlightcontroller.linkdiscovery.Link;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.routing.*;
+import net.floodlightcontroller.statistics.IStatisticsService;
+import net.floodlightcontroller.statistics.SwitchPortBandwidth;
 import net.floodlightcontroller.topology.ITopologyService;
+import net.floodlightcontroller.topology.TopologyManager;
 
 public class PolicyForward extends ForwardingBase implements IOFMessageListener, IFloodlightModule, ILinkDiscoveryListener {
 	
@@ -47,6 +60,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	protected static ILinkDiscoveryService linkDiscoveryService; //LLDP service. It handles the LLDP protocol. We need to subscribe to it to listen for LLDP topology events.
 	protected ITopologyService topologyService;
 	protected IRoutingService routingManager;
+	protected IStatisticsService statisticservice;
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
@@ -74,6 +88,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		l.add(ITopologyService.class);
 		l.add(IRoutingService.class);
 		l.add(IOFSwitchService.class);
+		l.add(IStatisticsService.class);
 		
 		return l;
 	}
@@ -88,6 +103,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		linkDiscoveryService = context.getServiceImpl(ILinkDiscoveryService.class);
 		topologyService = context.getServiceImpl(ITopologyService.class);
 		routingManager = context.getServiceImpl(IRoutingService.class);
+		statisticservice = context.getServiceImpl(IStatisticsService.class);
 	}
 
 	@Override
@@ -157,12 +173,61 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		OFPacketIn pi = (OFPacketIn) msg;
 		
+		//List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
+		/*
+		List<OFStatsReply> stats = this.getPortStatistcs(sw, pi.getInPort());
+		
+		while( stats == null) {
+			//logger.info("no stats");
+		}
+		logger.info("{}", stats.toString());
+		
+		statisticservice.collectStatistics(true);
+		SwitchPortBandwidth spb;
+		for (Path p: pathSlow) {
+			for (NodePortTuple npt : p.getPath()) {
+				try {
+				spb = statisticservice.getBandwidthConsumption(npt.getNodeId(), npt.getPortId());
+				logger.info("Sw {} Bandwidth: {}", spb.getSwitchId(), spb.getBitsPerSecondRx().getValue());
+				logger.info("LSBPS {}", spb.getLinkSpeedBitsPerSec().getValue());
+				} catch (NullPointerException e) {
+					logger.info("spb null");
+				}
+			}
+		}
+		*/
+		
 		Path path = routingManager.getPath(sw.getId(), pi.getInPort(), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
 		logger.info("Path found {}", path);
 		
 		Match matchRule = buildMatch(sw, msg, cntx, eth);
 		
 		pushRoute(path, matchRule, pi, sw.getId(), DEFAULT_FORWARDING_COOKIE, cntx, false, OFFlowModCommand.ADD);
+	}
+	
+	protected List<OFStatsReply> getPortStatistcs(IOFSwitch sw, OFPort ofp) {		
+		Match match;
+		OFStatsRequest<?> req = null;
+		ListenableFuture<?> future;
+		List<OFStatsReply> values = null;
+		
+		match = sw.getOFFactory().buildMatch().build();
+		
+		req = sw.getOFFactory().buildPortStatsRequest()
+				.setPortNo(ofp)
+				.build();
+		
+		try {
+			if ( req != null ) {
+				future = sw.writeStatsRequest(req);
+				//values = (List<OFStatsReply>) future.get(10 / 2, TimeUnit.SECONDS);
+				values = (List<OFStatsReply>) future.get();
+			}
+		}
+		catch (Exception e) {
+			// TODO: handle exception
+		}
+		return values;
 	}
 	
 	private Match buildMatch(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth) {
