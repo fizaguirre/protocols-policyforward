@@ -156,16 +156,19 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 		
+		/* Handles the packet in event and take two actions.
+		 * If the packet is an ARP request, flood as broadcast.
+		 * If the packet is an IPv4 packet, than computes the path
+		 * between the nodes and insert it into the openflow switches.
+		 */
+		
 		switch(msg.getType())
 		{
 		case PACKET_IN:
 			Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-			//logger.info("Packet from src mac addr {} received from switch {}", eth.getSourceMACAddress(), sw.getId().toString());
-			//logger.info("Packet eth payload: {}", eth.getPayload());
 			
 			if ( eth.getEtherType() == EthType.ARP) {
 				// SEND PACKET TO ALL OTHER PORTS OF THE SWITCH
-				
 				ARP arp = (ARP) eth.getPayload();
 				if ( arp.getOpCode() == ARP.OP_REQUEST) {
 					this.doBroacastPacket(sw, msg);
@@ -177,8 +180,6 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				}
 			}
 			else if (eth.getEtherType() == EthType.IPv4 ) {
-				//logger.info("Packet from src mac addr {} received from switch {}", eth.getSourceMACAddress(), sw.getId().toString());
-				//logger.info("Packet eth payload: {}", eth.getPayload());
 				this.doFlow(sw, msg, cntx, eth);
 			}
 			
@@ -212,17 +213,17 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		logger.info("Por speed {}", test);*/
 
 		Path path = routingManager.getPath(sw.getId(), pi.getInPort(), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
-		logger.info("Pacote de {} para {}", sw.getId().toString(), destPortSwitch.getNodeId().toString());
+		//logger.info("Pacote de {} para {}", sw.getId().toString(), destPortSwitch.getNodeId().toString());
 		Path escolhido = null;
 		//escolhido = this.getBestPath(sw, msg, cntx, eth, destPortSwitch);
-		//escolhido = this.getBestPathSlow(sw, msg, cntx, eth, destPortSwitch);
+		escolhido = this.getBestPathSlow(sw, msg, cntx, eth, destPortSwitch);
 		
 		if(escolhido == null) {
 			logger.info("NENHUM CAMINHO ENCONTRADO");
 			escolhido = path;
 		}
 		
-		logger.info("Path found: {}",escolhido.toString());
+		logger.info("===> Path found: {}", escolhido.toString());
 		
 		Match matchRule = buildMatch(sw, msg, cntx, eth);
 		
@@ -275,41 +276,42 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 			//escolhido = null;
 		}
 		
-		//logger.info("Path found: {}",escolhido.toString());
-		
 		return escolhido;
 	}
 	
+	//Get the path using the slow function that computes the Yen's algorithm
 	protected Path getBestPathSlow(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth, SwitchPort destPortSwitch) {
 		OFPacketIn pi = (OFPacketIn) msg;
 		
 		List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
-
-		//List<OFStatsReply> stats = this.getPortStatistcs(sw, pi.getInPort());
 		
-
-		//logger.info("{}", stats.toString());
 		
-		U64 total = U64.of(0);
-		
-		statisticsService.collectStatistics(true);
-		SwitchPortBandwidth spb;
-		for (Path p: pathSlow) {
-			total = U64.of(0);
+		U64 pathUtilization;
+		U64 bestPath = U64.of(0);
+		Path chosenPath = null;
+		for (Path p : pathSlow ) {
+			pathUtilization = U64.of(0);
 			for (NodePortTuple npt : p.getPath()) {
-				try {
-				spb = statisticsService.getBandwidthConsumption(npt.getNodeId(), npt.getPortId());
-				total.add(spb.getBitsPerSecondRx());
-				//logger.info("Sw {} Bandwidth: {}", spb.getSwitchId(), spb.getBitsPerSecondRx().getValue());
-				//logger.info("LSBPS {}", spb.getLinkSpeedBitsPerSec().getValue());
-				} catch (NullPointerException e) {
-					logger.info("No traffic info.");
+				for ( U64 util : history.get(npt)) {
+					pathUtilization = pathUtilization.add(util);
 				}
 			}
-			logger.info("Path id {} traffic {}", p.getId(), total.getValue());
+			
+			if (bestPath.getBigInteger() != BigInteger.ZERO ) {
+				if (pathUtilization.compareTo(bestPath) < 0 ) {
+					bestPath = pathUtilization;
+					chosenPath = p;
+				}
+			}
+			else
+			{
+				bestPath = pathUtilization;
+			}
+			
+			logger.info("Path Candidate {} Utilization {}", p.getId(), pathUtilization.getBigInteger());
 		}
 		
-		return null;
+		return chosenPath;
 	}
 	
 	protected List<OFStatsReply> getPortStatistcs(IOFSwitch sw, OFPort ofp) {		
@@ -343,18 +345,19 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		Match matchRule = null;
 		
+		//Build ARP match
 		if (eth.getEtherType() == EthType.ARP) {
-			logger.info("Building ARP match.");
+			//logger.info("Building ARP match.");
 			matchRule = sw.getOFFactory().buildMatch()
 				.setExact(MatchField.ETH_TYPE, EthType.ARP)
 				.setExact(MatchField.ETH_SRC, srcHost.getMACAddress())
 				.setExact(MatchField.ETH_DST, dstHost.getMACAddress())
 				.build();
 		}else if (eth.getEtherType() == EthType.IPv4) {
-			logger.info("Building IVv4 match.");
+			//logger.info("Building IVv4 match.");
 			IPv4 ipv4 = (IPv4) eth.getPayload();
 			
-			
+			//Build IPv4 match
 			matchRule = sw.getOFFactory().buildMatch()
 				.setExact(MatchField.ETH_TYPE, EthType.IPv4)
 				.setExact(MatchField.ETH_SRC, srcHost.getMACAddress())
@@ -419,6 +422,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 
 		@Override
 		public void run() {
+			//Records the link history utilization
 			try {
 				logger.info("Collecting bandwidth status");
 				
@@ -427,7 +431,6 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				if (m != null)
 				{
 					for (Entry<NodePortTuple, SwitchPortBandwidth> s : m.entrySet()) {
-						//log.info("Speed:  {}", s.getValue().getLinkSpeedBitsPerSec().toString());
 						if(history.containsKey(s.getKey())) {		
 							if (history.get(s.getKey()).remainingCapacity() <= 0 )
 								history.get(s.getKey()).poll();
@@ -440,7 +443,6 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 							history.put(s.getKey(), list);
 							}
 						}
-					
 				}
 				
 				
@@ -454,7 +456,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 								msg = msg.concat(bps.getBigInteger().toString());
 								msg = msg.concat(", ");
 							}
-							logger.info(msg);					
+							//logger.info(msg);					
 						}
 		
 				}
