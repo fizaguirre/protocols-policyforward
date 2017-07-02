@@ -1,40 +1,37 @@
 package net.floodlightcontroller.policyforward;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Map.Entry;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFPacketOut;
-import org.projectfloodlight.openflow.protocol.OFPortConfig;
-import org.projectfloodlight.openflow.protocol.OFPortDesc;
-import org.projectfloodlight.openflow.protocol.OFPortFeatures;
+<<<<<<< HEAD
 import org.projectfloodlight.openflow.protocol.OFStatsReply;
 import org.projectfloodlight.openflow.protocol.OFStatsRequest;
 import org.projectfloodlight.openflow.protocol.OFType;
+=======
+>>>>>>> 4533a9f4ae188a315193fd0ac57da5970ccea910
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
-import org.projectfloodlight.openflow.types.ICMPv4Type;
 import org.projectfloodlight.openflow.types.OFPort;
+<<<<<<< HEAD
 import org.projectfloodlight.openflow.types.TableId;
+=======
 import org.projectfloodlight.openflow.types.U64;
+>>>>>>> 4533a9f4ae188a315193fd0ac57da5970ccea910
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,17 +50,25 @@ import net.floodlightcontroller.devicemanager.IDeviceService;
 import net.floodlightcontroller.devicemanager.SwitchPort;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+<<<<<<< HEAD
+import net.floodlightcontroller.linkdiscovery.Link;
+=======
 import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.LDUpdate;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.UpdateOperation;
+>>>>>>> 4533a9f4ae188a315193fd0ac57da5970ccea910
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.routing.*;
+<<<<<<< HEAD
+import net.floodlightcontroller.statistics.IStatisticsService;
+import net.floodlightcontroller.statistics.SwitchPortBandwidth;
+=======
 import net.floodlightcontroller.routing.IRoutingService.PATH_METRIC;
 import net.floodlightcontroller.statistics.IStatisticsService;
 import net.floodlightcontroller.statistics.SwitchPortBandwidth;
-import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.topology.ITopologyManagerBackend;
+>>>>>>> 4533a9f4ae188a315193fd0ac57da5970ccea910
 import net.floodlightcontroller.topology.ITopologyService;
 import net.floodlightcontroller.topology.TopologyManager;
 
@@ -74,14 +79,12 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	protected static ILinkDiscoveryService linkDiscoveryService; //LLDP service. It handles the LLDP protocol. We need to subscribe to it to listen for LLDP topology events.
 	protected ITopologyService topologyService;
 	protected IRoutingService routingManager;
+<<<<<<< HEAD
+	protected IStatisticsService statisticservice;
+=======
 	protected IStatisticsService statisticsService;
 	protected int count = 0;
-	
-	private static ScheduledFuture<?> futureCollector;
-	private static IThreadPoolService threadPoolService;
-	protected int interval = 5;
-	private static final int HIST_SIZE = 10;
-	private ConcurrentHashMap<NodePortTuple, LinkedBlockingQueue<U64>> history;
+>>>>>>> 4533a9f4ae188a315193fd0ac57da5970ccea910
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
@@ -111,8 +114,6 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		l.add(IOFSwitchService.class);
 		l.add(IStatisticsService.class);
 		
-		l.add(IThreadPoolService.class);
-		
 		return l;
 	}
 
@@ -126,9 +127,11 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		linkDiscoveryService = context.getServiceImpl(ILinkDiscoveryService.class);
 		topologyService = context.getServiceImpl(ITopologyService.class);
 		routingManager = context.getServiceImpl(IRoutingService.class);
+<<<<<<< HEAD
+		statisticservice = context.getServiceImpl(IStatisticsService.class);
+=======
 		statisticsService = context.getServiceImpl(IStatisticsService.class);
-		
-		threadPoolService = context.getServiceImpl(IThreadPoolService.class);
+>>>>>>> 4533a9f4ae188a315193fd0ac57da5970ccea910
 	}
 
 	@Override
@@ -140,9 +143,6 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		lduUpdate = new LinkedBlockingQueue<LDUpdate>();
 		routingManager.setMaxPathsToCompute(10);
 		statisticsService.collectStatistics(true);
-		
-		history = new ConcurrentHashMap<NodePortTuple, LinkedBlockingQueue<U64>>();
-		futureCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new CollectStats(), interval, interval, TimeUnit.SECONDS);
 
 	}
 
@@ -156,6 +156,11 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 		
+		//logger.info("Packet in type: {}", msg.getType());
+		
+		//logger.info("Statistics: {}", statisticsService.getBandwidthConsumption().toString());
+		;
+
 		switch(msg.getType())
 		{
 		case PACKET_IN:
@@ -177,8 +182,8 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				}
 			}
 			else if (eth.getEtherType() == EthType.IPv4 ) {
-				//logger.info("Packet from src mac addr {} received from switch {}", eth.getSourceMACAddress(), sw.getId().toString());
-				//logger.info("Packet eth payload: {}", eth.getPayload());
+				logger.info("Packet from src mac addr {} received from switch {}", eth.getSourceMACAddress(), sw.getId().toString());
+				logger.info("Packet eth payload: {}", eth.getPayload());
 				this.doFlow(sw, msg, cntx, eth);
 			}
 			
@@ -207,32 +212,37 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		}
 		
 		
+<<<<<<< HEAD
+		//List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
+		/*
+		List<OFStatsReply> stats = this.getPortStatistcs(sw, pi.getInPort());
+		
+		while( stats == null) {
+			//logger.info("no stats");
+		}
+		logger.info("{}", stats.toString());
+		
+		statisticservice.collectStatistics(true);
+		SwitchPortBandwidth spb;
+		for (Path p: pathSlow) {
+			for (NodePortTuple npt : p.getPath()) {
+				try {
+				spb = statisticservice.getBandwidthConsumption(npt.getNodeId(), npt.getPortId());
+				logger.info("Sw {} Bandwidth: {}", spb.getSwitchId(), spb.getBitsPerSecondRx().getValue());
+				logger.info("LSBPS {}", spb.getLinkSpeedBitsPerSec().getValue());
+				} catch (NullPointerException e) {
+					logger.info("spb null");
+				}
+			}
+		}
+		*/
+		
+=======
 		OFPacketIn pi = (OFPacketIn) msg;
-		/*Set<OFPortFeatures> test = sw.getPort(pi.getInPort()).getCurr();
-		logger.info("Por speed {}", test);*/
 
+>>>>>>> 4533a9f4ae188a315193fd0ac57da5970ccea910
 		Path path = routingManager.getPath(sw.getId(), pi.getInPort(), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
 		logger.info("Pacote de {} para {}", sw.getId().toString(), destPortSwitch.getNodeId().toString());
-		Path escolhido = null;
-		//escolhido = this.getBestPath(sw, msg, cntx, eth, destPortSwitch);
-		//escolhido = this.getBestPathSlow(sw, msg, cntx, eth, destPortSwitch);
-		
-		if(escolhido == null) {
-			logger.info("NENHUM CAMINHO ENCONTRADO");
-			escolhido = path;
-		}
-		
-		logger.info("Path found: {}",escolhido.toString());
-		
-		Match matchRule = buildMatch(sw, msg, cntx, eth);
-		
-		pushRoute(escolhido, matchRule, pi, sw.getId(), DEFAULT_FORWARDING_COOKIE, cntx, false, OFFlowModCommand.ADD);
-	}
-	
-	protected Path getBestPath(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth, SwitchPort destPortSwitch) {
-		
-		OFPacketIn pi = (OFPacketIn) msg;
-		
 		List<Path> paths = routingManager.getPathsFast(sw.getId(), destPortSwitch.getNodeId());
 		NodePortTuple n_src = new NodePortTuple(sw.getId(), pi.getInPort());
 		NodePortTuple n_dst = new NodePortTuple(destPortSwitch.getNodeId(), destPortSwitch.getPortId());
@@ -264,7 +274,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 					escolhido = null;
 				}
 				if(escolhido != null) {
-					//logger.info("CAMINHO Escolhido de {}!!!",paths.size());
+					logger.info("CAMINHO Escolhido de {}!!!",paths.size());
 					break;
 				}
 			}
@@ -272,44 +282,15 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 			
 		if(escolhido == null) {
 			logger.info("NENHUM CAMINHO ENCONTRADO");
-			//escolhido = null;
+			escolhido = path;
 		}
 		
-		//logger.info("Path found: {}",escolhido.toString());
+		logger.info("Path found: {}",escolhido.toString());
 		
-		return escolhido;
-	}
-	
-	protected Path getBestPathSlow(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth, SwitchPort destPortSwitch) {
-		OFPacketIn pi = (OFPacketIn) msg;
 		
-		List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
-
-		//List<OFStatsReply> stats = this.getPortStatistcs(sw, pi.getInPort());
+		Match matchRule = buildMatch(sw, msg, cntx, eth);
 		
-
-		//logger.info("{}", stats.toString());
-		
-		U64 total = U64.of(0);
-		
-		statisticsService.collectStatistics(true);
-		SwitchPortBandwidth spb;
-		for (Path p: pathSlow) {
-			total = U64.of(0);
-			for (NodePortTuple npt : p.getPath()) {
-				try {
-				spb = statisticsService.getBandwidthConsumption(npt.getNodeId(), npt.getPortId());
-				total.add(spb.getBitsPerSecondRx());
-				//logger.info("Sw {} Bandwidth: {}", spb.getSwitchId(), spb.getBitsPerSecondRx().getValue());
-				//logger.info("LSBPS {}", spb.getLinkSpeedBitsPerSec().getValue());
-				} catch (NullPointerException e) {
-					logger.info("No traffic info.");
-				}
-			}
-			logger.info("Path id {} traffic {}", p.getId(), total.getValue());
-		}
-		
-		return null;
+		pushRoute(escolhido, matchRule, pi, sw.getId(), DEFAULT_FORWARDING_COOKIE, cntx, false, OFFlowModCommand.ADD);
 	}
 	
 	protected List<OFStatsReply> getPortStatistcs(IOFSwitch sw, OFPort ofp) {		
@@ -406,65 +387,41 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
 		
 		lduUpdate.addAll(updateList); //Get a list of link layer discovery updates
+		/*
+		for (LDUpdate u : updateList) {
+            if (u.getOperation() == UpdateOperation.LINK_REMOVED ||
+                    u.getOperation() == UpdateOperation.PORT_DOWN) {
+            	//pacotes que serao enviados para apagar flows
+            	Set<OFMessage> msgs = new HashSet<OFMessage>();
+            	if (u.getSrc() != null && !u.getSrc().equals(DatapathId.NONE)) {
+            		IOFSwitch srcSw = switchService.getSwitch(u.getSrc());
+            		msgs.add(srcSw.getOFFactory().buildFlowDelete()
+                            .setMatch(srcSw.getOFFactory().buildMatch()
+                                    .setExact(MatchField.IN_PORT, u.getSrcPort())
+                                    .build())
+                            .build());
+                    msgs.add(srcSw.getOFFactory().buildFlowDelete()
+                            .setOutPort(u.getSrcPort())
+                            .build());
+                    
+                    Set<DatapathId> switchs =  switchService.getAllSwitchDpids();
+                    for (DatapathId sw_id : switchs) {
+						IOFSwitch sw = switchService.getSwitch(sw_id);
+						if(sw != null && !sw.equals(srcSw)) {
+                            msgs.add(sw.getOFFactory().buildFlowDelete()
+                                    .setMatch(sw.getOFFactory().buildMatch()
+                                            .setExact(MatchField.IN_PORT, npt.getPortId())
+                                            .build())
+                                    .build());
+						}
+						}
+					}
+                    messageDamper.write(srcSw, msgs);
+            }
+		}
+		
+	}*/
 	}
 	
-	
-	public class CollectStats implements Runnable {
-		
-		protected int count = 0;
-		
-		public CollectStats() {
-			logger.info("Starting up status thread");
-		}
-
-		@Override
-		public void run() {
-			try {
-				logger.info("Collecting bandwidth status");
-				
-				Map<NodePortTuple, SwitchPortBandwidth> m = statisticsService.getBandwidthConsumption();
-				
-				if (m != null)
-				{
-					for (Entry<NodePortTuple, SwitchPortBandwidth> s : m.entrySet()) {
-						//log.info("Speed:  {}", s.getValue().getLinkSpeedBitsPerSec().toString());
-						if(history.containsKey(s.getKey())) {		
-							if (history.get(s.getKey()).remainingCapacity() <= 0 )
-								history.get(s.getKey()).poll();
-							
-							history.get(s.getKey()).add(s.getValue().getBitsPerSecondTx());
-							
-						}else {
-							LinkedBlockingQueue<U64> list = new LinkedBlockingQueue<U64>(HIST_SIZE);
-							list.add(s.getValue().getBitsPerSecondTx());
-							history.put(s.getKey(), list);
-							}
-						}
-					
-				}
-				
-				
-				if( history != null) {
-						String msg = new String();
-						for (Entry<NodePortTuple, LinkedBlockingQueue<U64>> e : history.entrySet()) {
-							msg = "Bandwidth NPT: ";
-							msg = msg.concat(e.getKey().toKeyString());
-							msg = msg.concat(" Traffic: ");
-							for (U64 bps : e.getValue()) {
-								msg = msg.concat(bps.getBigInteger().toString());
-								msg = msg.concat(", ");
-							}
-							logger.info(msg);					
-						}
-		
-				}
-			}
-			catch (Throwable t) {
-				logger.info("Unhandled exception {}", t.getMessage());
-			}
-			
-		}
-
-	}	
 
 }
