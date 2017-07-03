@@ -111,7 +111,6 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		l.add(IRoutingService.class);
 		l.add(IOFSwitchService.class);
 		l.add(IStatisticsService.class);
-		
 		l.add(IThreadPoolService.class);
 		
 		return l;
@@ -191,12 +190,16 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		return Command.CONTINUE;
 	}
+	/*
+		Funcao para criação do flow e descoberta do caminho.
+	*/
 	
 	private void doFlow(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth) {
 		IDevice dstHost = IDeviceService.fcStore.get(cntx, IDeviceService.CONTEXT_DST_DEVICE);
 		IDevice srcHost = IDeviceService.fcStore.get(cntx, IDeviceService.CONTEXT_SRC_DEVICE);
 		
 		SwitchPort destPortSwitch = null;
+		// Encontrar a porta do switch que o destino esta conectado
 		for ( SwitchPort swp : dstHost.getAttachmentPoints()) {
 			if (topologyService.isEdge(swp.getNodeId(), swp.getPortId())) {
 				destPortSwitch = swp;
@@ -249,68 +252,20 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		}
 		logger.info(msg);
 	}
+
 	
-	protected Path getBestPath(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth, SwitchPort destPortSwitch) {
-		
-		OFPacketIn pi = (OFPacketIn) msg;
-		
-		List<Path> paths = routingManager.getPathsFast(sw.getId(), destPortSwitch.getNodeId());
-		NodePortTuple n_src = new NodePortTuple(sw.getId(), OFMessageUtils.getInPort(pi));
-		NodePortTuple n_dst = new NodePortTuple(destPortSwitch.getNodeId(), destPortSwitch.getPortId());
-		Map<NodePortTuple, SwitchPortBandwidth> m = statisticsService.getBandwidthConsumption();
-		//Usando 10M como referencia para "link congestionado"
-		U64 dez_megabits = U64.of(10000000);
-		Path escolhido = null;
-		
-		for (Path pt : paths) {
-			escolhido = pt;
-			List<NodePortTuple> lista = escolhido.getPath();
-			if(!lista.get(0).equals(n_src)) {
-				lista.add(0, n_src);
-				lista.add(n_dst);
-			}
-			logger.info("OLhando path: {}", lista.toString());
-			for (int i = 1; i < lista.size(); i+=2) {
-				NodePortTuple nodePortTuple = lista.get(i);
-				if (topologyService.isEdge(nodePortTuple.getNodeId(), nodePortTuple.getPortId()))
-					continue;	
-				
-				logger.info("OLhando link: {}", nodePortTuple.toString());	
-				SwitchPortBandwidth spb = m.get(nodePortTuple);
-				//Tx > que 10M
-				if(spb != null)
-				if(dez_megabits.compareTo(spb.getBitsPerSecondTx()) <= 0) {
-					//caminho congestionado
-					logger.info("{} -- {}", dez_megabits, spb.getBitsPerSecondTx());
-					escolhido = null;
-				}
-				if(escolhido != null) {
-					//logger.info("CAMINHO Escolhido de {}!!!",paths.size());
-					break;
-				}
-			}
-		}
-			
-		if(escolhido == null) {
-			logger.info("NENHUM CAMINHO ENCONTRADO");
-			//escolhido = null;
-		}
-		
-		return escolhido;
-	}
-	
-	//Get the path using the slow function that computes the Yen's algorithm
 	protected Path getBestPathSlow(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth, SwitchPort destPortSwitch) {
 		OFPacketIn pi = (OFPacketIn) msg;
 		
-		
-		List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
+		// Get up to 5 routes
+		List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 5);
 		Long alpha = (long) 10000;
 		Long hops;
 		Long best = Long.MAX_VALUE;
 		Long utilization;
 		
 		Path chosenPath = null;
+		//iteracao pelos ecaminhos encontrados
 		for (Path p : pathSlow ) {
 			//logger.info("{}", p.toString());
 			utilization = Long.valueOf(0);
@@ -353,30 +308,9 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		return chosenPath;
 	}
 	
-	protected List<OFStatsReply> getPortStatistcs(IOFSwitch sw, OFPort ofp) {		
-		Match match;
-		OFStatsRequest<?> req = null;
-		ListenableFuture<?> future;
-		List<OFStatsReply> values = null;
-		
-		match = sw.getOFFactory().buildMatch().build();
-		
-		req = sw.getOFFactory().buildPortStatsRequest()
-				.setPortNo(ofp)
-				.build();
-		
-		try {
-			if ( req != null ) {
-				future = sw.writeStatsRequest(req);
-				//values = (List<OFStatsReply>) future.get(10 / 2, TimeUnit.SECONDS);
-				values = (List<OFStatsReply>) future.get();
-			}
-		}
-		catch (Exception e) {
-			// TODO: handle exception
-		}
-		return values;
-	}
+	/*
+		Criar match para o flow que será instalado nos switches
+	*/
 	
 	private Match buildMatch(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth) {
 		IDevice dstHost = IDeviceService.fcStore.get(cntx, IDeviceService.CONTEXT_DST_DEVICE);
@@ -409,6 +343,10 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		return matchRule;
 	}
+	
+	/*
+		Função para realizar o broadcast de um pacote na rede
+	*/
 	
 	private void doBroacastPacket(IOFSwitch sw, OFMessage m) {
 		OFPacketIn pi = (OFPacketIn) m;
@@ -450,7 +388,9 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		lduUpdate.addAll(updateList); //Get a list of link layer discovery updates
 	}
 	
-	
+	/*
+		Classe que implementa a interface Runnable, para coletar as estatísticas dos enlaces
+	*/
 	public class CollectStats implements Runnable {
 		
 		protected int count = 0;
