@@ -226,11 +226,24 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 			escolhido = path;
 		}
 		
-		logger.info("===> Path chosed: {} | {}",escolhido.getPathIndex(), escolhido.toString());
 		
 		Match matchRule = buildMatch(sw, msg, cntx, eth);
 		
 		pushRoute(escolhido, matchRule, pi, sw.getId(), DEFAULT_FORWARDING_COOKIE, cntx, false, OFFlowModCommand.ADD);
+		
+		logger.info(" === Path {} chosed ===" , escolhido.getPathIndex());
+		this.printPath(escolhido);
+		logger.info("===========");
+	}
+	
+	protected void printPath(Path p) {
+		String msg = new String();
+		msg = msg.concat("Path: ");
+		for (NodePortTuple npt : p.getPath()) {
+			msg = msg.concat(" -> ");
+			msg = msg.concat("sw "+ Long.toString(npt.getNodeId().getLong()));
+		}
+		logger.info(msg);
 	}
 	
 	protected Path getBestPath(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth, SwitchPort destPortSwitch) {
@@ -295,7 +308,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		Path chosenPath = null;
 		for (Path p : pathSlow ) {
-			logger.info("{}", p.toString());
+			//logger.info("{}", p.toString());
 			utilization = Long.valueOf(0);
 			long ponderada = 0;
 			long peso = 1;
@@ -321,7 +334,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				best = utilization;
 				chosenPath = p;
 			}
-			logger.info("Path Candidate {} Utilization {}", p.getId(), utilization);
+			logger.info("Path Candidate {} Utilization {}", p.getPathIndex(), utilization);
 			}
 			
 		}
