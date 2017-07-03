@@ -212,7 +212,11 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		OFPacketIn pi = (OFPacketIn) msg;
 
 		Path path = routingManager.getPath(sw.getId(), OFMessageUtils.getInPort(pi), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
-		logger.info("Packet from {} to {}", sw.getId().toString(), destPortSwitch.getNodeId().toString());
+		String logmsg = new String();
+		logmsg = "Packet from "+ sw.getId().toString() + "("+ OFMessageUtils.getInPort(pi).toString()+")";
+		logmsg = logmsg.concat(" "+destPortSwitch.getNodeId().toString()+"("+destPortSwitch.getPortId().toString()+")");
+		
+		logger.info(logmsg);
 		
 		Path escolhido = null;
 
