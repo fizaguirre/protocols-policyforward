@@ -66,6 +66,7 @@ import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.topology.ITopologyManagerBackend;
 import net.floodlightcontroller.topology.ITopologyService;
 import net.floodlightcontroller.topology.TopologyManager;
+import net.floodlightcontroller.util.OFMessageUtils;
 
 public class PolicyForward extends ForwardingBase implements IOFMessageListener, IFloodlightModule, ILinkDiscoveryListener {
 	
@@ -210,7 +211,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		OFPacketIn pi = (OFPacketIn) msg;
 
-		Path path = routingManager.getPath(sw.getId(), pi.getInPort(), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
+		Path path = routingManager.getPath(sw.getId(), OFMessageUtils.getInPort(pi), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
 		logger.info("Packet from {} to {}", sw.getId().toString(), destPortSwitch.getNodeId().toString());
 		
 		Path escolhido = null;
@@ -218,7 +219,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		if (sw.getId() != destPortSwitch.getNodeId())
 			escolhido = this.getBestPathSlow(sw, msg, cntx, eth, destPortSwitch);
 		else
-			escolhido = routingManager.getPath(sw.getId(), pi.getInPort(), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
+			escolhido = routingManager.getPath(sw.getId(), OFMessageUtils.getInPort(pi), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
 		
 		if(escolhido == null) {
 			logger.info("NO PATH FOUND");
@@ -237,7 +238,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		OFPacketIn pi = (OFPacketIn) msg;
 		
 		List<Path> paths = routingManager.getPathsFast(sw.getId(), destPortSwitch.getNodeId());
-		NodePortTuple n_src = new NodePortTuple(sw.getId(), pi.getInPort());
+		NodePortTuple n_src = new NodePortTuple(sw.getId(), OFMessageUtils.getInPort(pi));
 		NodePortTuple n_dst = new NodePortTuple(destPortSwitch.getNodeId(), destPortSwitch.getPortId());
 		Map<NodePortTuple, SwitchPortBandwidth> m = statisticsService.getBandwidthConsumption();
 		//Usando 10M como referencia para "link congestionado"
@@ -322,7 +323,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		}
 		
 		if(chosenPath != null) {
-			NodePortTuple n_src = new NodePortTuple(sw.getId(), pi.getInPort());
+			NodePortTuple n_src = new NodePortTuple(sw.getId(), OFMessageUtils.getInPort(pi));
 			NodePortTuple n_dst = new NodePortTuple(destPortSwitch.getNodeId(), destPortSwitch.getPortId());
 			if(n_src.getNodeId() != n_dst.getNodeId()) {
 				List<NodePortTuple> lista = chosenPath.getPath();
@@ -396,7 +397,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	
 	private void doBroacastPacket(IOFSwitch sw, OFMessage m) {
 		OFPacketIn pi = (OFPacketIn) m;
-		OFPort portIn = pi.getInPort();
+		OFPort portIn = OFMessageUtils.getInPort(pi);
 		
 		OFPacketOut po;
 		Set<OFPort> broadcastPorts;
