@@ -288,36 +288,40 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		
 		List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
-		logger.info("ACHAMOS {} CAMINHOS UHUL", pathSlow.size());
+		Long alpha = (long) 10000;
+		Long hops;
+		Long best = Long.MAX_VALUE;
+		Long utilization;
 		
-		U64 pathUtilization;
-		U64 bestPath = U64.of(0);
 		Path chosenPath = null;
 		for (Path p : pathSlow ) {
-			//logger.info("{}", p.toString());
-			pathUtilization = U64.of(0);
+			logger.info("{}", p.toString());
+			utilization = Long.valueOf(0);
+			long ponderada = 0;
+			long peso = 1;
+			long div = 1;
 			if(p != null)
 			{
+				hops = Long.valueOf(p.getPath().size());
+				peso = 1;
+				div = 1;
 			for (NodePortTuple npt : p.getPath()) {
 				if(history != null && npt != null && history.get(npt) != null)
 				for ( U64 util : history.get(npt)) {
-					pathUtilization = pathUtilization.add(util);
+					ponderada += peso * util.getValue();
+					div += peso;
+					peso++;
 				}
+				utilization = utilization + (ponderada / div);
 			}
+
+			utilization += hops * alpha;
 			
-			if (bestPath.getBigInteger() != BigInteger.ZERO ) {
-				if (pathUtilization.compareTo(bestPath) < 0 ) {
-					bestPath = pathUtilization;
-					chosenPath = p;
-				}
-			}
-			else
-			{
-				bestPath = pathUtilization;
+			if (utilization < best ) {
+				best = utilization;
 				chosenPath = p;
 			}
-			
-			logger.info("Path Candidate {} Utilization {}", p.getPathIndex(), pathUtilization.getBigInteger());
+			logger.info("Path Candidate {} Utilization {}", p.getId(), utilization);
 			}
 			
 		}
@@ -330,8 +334,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				if(!lista.get(0).equals(n_src)) {
 					lista.add(0, n_src);
 					lista.add(n_dst);
-				}			
-				
+				}					
 			}
 		}
 
