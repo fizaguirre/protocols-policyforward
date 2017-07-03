@@ -138,7 +138,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		logger.info("Starting up PolicyForward module");
 		linkDiscoveryService.addListener(this);
 		lduUpdate = new LinkedBlockingQueue<LDUpdate>();
-		routingManager.setMaxPathsToCompute(10);
+		routingManager.setMaxPathsToCompute(2);
 		statisticsService.collectStatistics(true);
 		
 		history = new ConcurrentHashMap<NodePortTuple, LinkedBlockingQueue<U64>>();
@@ -209,21 +209,23 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		
 		
 		OFPacketIn pi = (OFPacketIn) msg;
-		/*Set<OFPortFeatures> test = sw.getPort(pi.getInPort()).getCurr();
-		logger.info("Por speed {}", test);*/
 
 		Path path = routingManager.getPath(sw.getId(), pi.getInPort(), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
-		//logger.info("Pacote de {} para {}", sw.getId().toString(), destPortSwitch.getNodeId().toString());
+		logger.info("Packet from {} to {}", sw.getId().toString(), destPortSwitch.getNodeId().toString());
+		
 		Path escolhido = null;
-		//escolhido = this.getBestPath(sw, msg, cntx, eth, destPortSwitch);
-		escolhido = this.getBestPathSlow(sw, msg, cntx, eth, destPortSwitch);
+
+		if (sw.getId() != destPortSwitch.getNodeId())
+			escolhido = this.getBestPathSlow(sw, msg, cntx, eth, destPortSwitch);
+		else
+			escolhido = routingManager.getPath(sw.getId(), pi.getInPort(), destPortSwitch.getNodeId(), destPortSwitch.getPortId());
 		
 		if(escolhido == null) {
-			logger.info("NENHUM CAMINHO ENCONTRADO");
+			logger.info("NO PATH FOUND");
 			escolhido = path;
 		}
 		
-		logger.info("===> Path found: {}", escolhido.toString());
+		logger.info("===> Path chosed: {} | {}",escolhido.getPathIndex(), escolhido.toString());
 		
 		Match matchRule = buildMatch(sw, msg, cntx, eth);
 		
@@ -283,15 +285,20 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	protected Path getBestPathSlow(IOFSwitch sw, OFMessage msg, FloodlightContext cntx, Ethernet eth, SwitchPort destPortSwitch) {
 		OFPacketIn pi = (OFPacketIn) msg;
 		
-		List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
 		
+		List<Path> pathSlow = routingManager.getPathsSlow(sw.getId(), destPortSwitch.getNodeId(), 10);
+		logger.info("ACHAMOS {} CAMINHOS UHUL", pathSlow.size());
 		
 		U64 pathUtilization;
 		U64 bestPath = U64.of(0);
 		Path chosenPath = null;
 		for (Path p : pathSlow ) {
+			//logger.info("{}", p.toString());
 			pathUtilization = U64.of(0);
+			if(p != null)
+			{
 			for (NodePortTuple npt : p.getPath()) {
+				if(history != null && npt != null && history.get(npt) != null)
 				for ( U64 util : history.get(npt)) {
 					pathUtilization = pathUtilization.add(util);
 				}
@@ -306,11 +313,27 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 			else
 			{
 				bestPath = pathUtilization;
+				chosenPath = p;
 			}
 			
-			logger.info("Path Candidate {} Utilization {}", p.getId(), pathUtilization.getBigInteger());
+			logger.info("Path Candidate {} Utilization {}", p.getPathIndex(), pathUtilization.getBigInteger());
+			}
+			
 		}
 		
+		if(chosenPath != null) {
+			NodePortTuple n_src = new NodePortTuple(sw.getId(), pi.getInPort());
+			NodePortTuple n_dst = new NodePortTuple(destPortSwitch.getNodeId(), destPortSwitch.getPortId());
+			if(n_src.getNodeId() != n_dst.getNodeId()) {
+				List<NodePortTuple> lista = chosenPath.getPath();
+				if(!lista.get(0).equals(n_src)) {
+					lista.add(0, n_src);
+					lista.add(n_dst);
+				}			
+				
+			}
+		}
+
 		return chosenPath;
 	}
 	
