@@ -80,8 +80,8 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 	
 	private static ScheduledFuture<?> futureCollector;
 	private static IThreadPoolService threadPoolService;
-	protected int interval = 5;
-	private static final int HIST_SIZE = 10;
+	protected int interval = 3;
+	private static final int HIST_SIZE = 5;
 	private ConcurrentHashMap<NodePortTuple, LinkedBlockingQueue<U64>> history;
 
 	@Override
@@ -139,7 +139,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		logger.info("Starting up PolicyForward module");
 		linkDiscoveryService.addListener(this);
 		lduUpdate = new LinkedBlockingQueue<LDUpdate>();
-		routingManager.setMaxPathsToCompute(2);
+		routingManager.setMaxPathsToCompute(5);
 		statisticsService.collectStatistics(true);
 		
 		history = new ConcurrentHashMap<NodePortTuple, LinkedBlockingQueue<U64>>();
@@ -310,22 +310,17 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		for (Path p : pathSlow ) {
 			//logger.info("{}", p.toString());
 			utilization = Long.valueOf(0);
-			long ponderada = 0;
-			long peso = 1;
-			long div = 1;
+			long media = 0;
+
 			if(p != null)
 			{
 				hops = Long.valueOf(p.getPath().size());
-				peso = 1;
-				div = 1;
 			for (NodePortTuple npt : p.getPath()) {
 				if(history != null && npt != null && history.get(npt) != null)
 				for ( U64 util : history.get(npt)) {
-					ponderada += peso * util.getValue();
-					div += peso;
-					peso++;
+					media += util.getValue();
 				}
-				utilization = utilization + (ponderada / div);
+				utilization = utilization + (media / p.getPath().size());
 			}
 
 			utilization += hops * alpha;
@@ -347,7 +342,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 				if(!lista.get(0).equals(n_src)) {
 					lista.add(0, n_src);
 					lista.add(n_dst);
-				}					
+				}		
 			}
 		}
 
