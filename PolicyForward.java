@@ -403,7 +403,7 @@ public class PolicyForward extends ForwardingBase implements IOFMessageListener,
 		public void run() {
 			//Records the link history utilization
 			try {
-				logger.info("Collecting bandwidth status");
+				//logger.info("Collecting bandwidth status");
 				
 				Map<NodePortTuple, SwitchPortBandwidth> m = statisticsService.getBandwidthConsumption();
 				
